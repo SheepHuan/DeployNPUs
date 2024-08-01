@@ -1,3 +1,6 @@
+# Custom Dirs
+sdks/
+build/
 # Prerequisites
 *.d
 
