@@ -1,6 +1,8 @@
 # Custom Dirs
 sdks/
 build/
+.vscode/
+saves/
 # Prerequisites
 *.d
 
