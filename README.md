@@ -4,7 +4,7 @@
 ## Support Platforms
 
 1. RKNN2
-    - RK3568 (2.0.0b23)
+    - RK3568 (2.0.0b23), 支持op profiling.
 2. HIAI
     - Kirin9000
 3. BPU
