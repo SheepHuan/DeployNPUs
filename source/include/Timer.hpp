@@ -7,6 +7,7 @@
 #include <cmath>
 #include <numeric>
 #include <functional>
+#include <tuple>
 #include "glog/logging.h"
 using namespace std;
 using namespace std::chrono;
@@ -40,14 +41,15 @@ public:
         }
     }
 
-    void report()
+    std::tuple<std::tuple<double, double, double, double>, std::tuple<double, double, double, double>> report()
     {
         LOG(INFO) << "Warmup Statistics: " << "\n";
         // cout << "Warmup Statistics:" << endl;
-        report_statistics(durations_warmup_);
+        auto warmup_data = report_statistics(durations_warmup_);
         LOG(INFO) << "Normal Statistics: " << "\n";
         // cout << "Normal Statistics:" << endl;
-        report_statistics(durations_normal_);
+        auto normal_data = report_statistics(durations_normal_);
+        return std::make_tuple(warmup_data, normal_data);
     }
 
 private:
@@ -57,10 +59,10 @@ private:
     vector<long long> durations_warmup_;
     vector<long long> durations_normal_;
 
-    void report_statistics(const vector<long long> &durations)
+    std::tuple<double, double, double, double> report_statistics(const vector<long long> &durations)
     {
         if (durations.empty())
-            return;
+            return std::make_tuple(0, 0, 0, 0);
 
         double sum = accumulate(durations.begin(), durations.end(), 0.0);
         double mean = sum / durations.size();
@@ -73,7 +75,7 @@ private:
         double stdev = sqrt(sq_sum / durations.size() - mean * mean);
 
         cout << "Count:" << durations.size() << ", avg: " << mean << " us, std: " << stdev << " us, " << ", min: " << min_val << " us, " << "max: " << max_val << " us" << endl;
-
+        return std::make_tuple(mean, stdev, (double)min_val, (double)max_val);
         // cout << "Count: " << durations.size() << endl;
     }
 };
