@@ -14,14 +14,4 @@ include_directories(
 
 include(cmakes/dependency.cmake)
 include(cmakes/rknn2.cmake)
-# # 添加一个可执行文件
-# add_executable(MyExecutable main.cpp)
-
-# # 添加需要的头文件
-# target_include_directories(MyExecutable PRIVATE include)
-
-# # 添加一个库
-# add_library(MyLibrary STATIC src/library.cpp)
-
-# # 将库链接到可执行文件
-# target_link_libraries(MyExecutable PRIVATE MyLibrary)
+include(cmakes/hbbpu.cmake)

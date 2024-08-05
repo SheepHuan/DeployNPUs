@@ -1,5 +1,5 @@
-#ifndef TIMER_HPP
-#define TIMER_HPP
+#ifndef MY_TIMER_HPP
+#define MY_TIMER_HPP
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -11,6 +11,13 @@
 #include "glog/logging.h"
 using namespace std;
 using namespace std::chrono;
+typedef struct LatencyPerformanceData
+{
+    double mean;
+    double stdev;
+    double min;
+    double max;
+} LatencyPerfData;
 
 class Timer
 {
@@ -41,7 +48,7 @@ public:
         }
     }
 
-    std::tuple<std::tuple<double, double, double, double>, std::tuple<double, double, double, double>> report()
+    std::tuple<LatencyPerfData, LatencyPerfData> report()
     {
         LOG(INFO) << "Warmup Statistics: " << "\n";
         // cout << "Warmup Statistics:" << endl;
@@ -59,10 +66,10 @@ private:
     vector<long long> durations_warmup_;
     vector<long long> durations_normal_;
 
-    std::tuple<double, double, double, double> report_statistics(const vector<long long> &durations)
+    LatencyPerfData report_statistics(const vector<long long> &durations)
     {
         if (durations.empty())
-            return std::make_tuple(0, 0, 0, 0);
+            return {0, 0, 0, 0};
 
         double sum = accumulate(durations.begin(), durations.end(), 0.0);
         double mean = sum / durations.size();
@@ -75,7 +82,12 @@ private:
         double stdev = sqrt(sq_sum / durations.size() - mean * mean);
 
         cout << "Count:" << durations.size() << ", avg: " << mean << " us, std: " << stdev << " us, " << ", min: " << min_val << " us, " << "max: " << max_val << " us" << endl;
-        return std::make_tuple(mean, stdev, (double)min_val, (double)max_val);
+        return {
+            mean,
+            stdev,
+            (double)min_val,
+            (double)max_val};
+        // return std::make_tuple(mean, stdev, (double)min_val, (double)max_val);
         // cout << "Count: " << durations.size() << endl;
     }
 };

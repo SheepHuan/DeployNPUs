@@ -47,8 +47,6 @@ int main(int argc, char *argv[])
     FLAGS_colorlogtostderr = true; // 设置记录到标准输出的颜色消息（如果终端支持）
     FLAGS_log_prefix = true;       // 设置日志前缀是否应该添加到每行输出
     FLAGS_logbufsecs = 0;          // 设置可以缓冲日志的最大秒数，0指实时输出
-    // FLAGS_max_log_size = 10;                // 设置最大日志文件大小（以MB为单位）
-    // FLAGS_stop_logging_if_full_disk = true; // 设置是否在磁盘已满时避免日志记录到磁盘
 
     std::string model = FLAGS_model;
     int num_warmup = FLAGS_num_warmup;
