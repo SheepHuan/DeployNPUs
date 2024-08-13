@@ -1,8 +1,8 @@
-#include "MyBPU.hpp"
-#include "Timer.hpp"
-#include "Helper.hpp"
+#include "function.h"
+#include "Timer.h"
+#include "Helper.h"
 // 定义模型文件的路径
-DEFINE_string(model, "path", "The file path to the rknn model.");
+DEFINE_string(model, "path", "The file path to the hbdnn model.");
 
 // 定义预热运行的次数，用于模型初始化或数据预加载
 DEFINE_int32(num_warmup, 10, "The number of warmup runs before actual benchmarking.");
