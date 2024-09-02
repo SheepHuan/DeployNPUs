@@ -1,5 +1,11 @@
 # DeployNPUs
 
+## Run
+
+```bash
+git clone https://github.com/SheepHuan/DeployNPUs.git
+git submodule update --init --recursive
+```
 
 ## Support Platforms
 
@@ -13,7 +19,7 @@
     - Snapdragon865
 
 ## Dependency
-git submodule add https://github.com/google/glog.git 3rd-party/glog
-git submodule add https://github.com/gflags/gflags.git 3rd-party/gflags
+<!-- git submodule add https://github.com/google/glog.git 3rd-party/glog
+git submodule add https://github.com/gflags/gflags.git 3rd-party/gflags -->
 1. [gflags v2.2.2](https://github.com/gflags/gflags/tree/v2.2.2) 
 2. [glog v0.7.1](https://github.com/google/glog/tree/v0.7.1)

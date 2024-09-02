@@ -59,6 +59,7 @@ export_rknn(osp.join(onnx_dir,onnx_name),osp.join(rknn_dir,rknn_name),"rk3588")
     ```bash
     mkdir build && cd build
     cmake .. -DBUILD_RKNN2=ON
+
     make -j
     ```
 

@@ -1,4 +1,5 @@
 # Custom Dirs
+models/
 sdks/
 build/
 .vscode/
