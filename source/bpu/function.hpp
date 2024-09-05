@@ -1,5 +1,5 @@
-#ifndef MY_BPU_HPP
-#define MY_BPU_HPP
+#ifndef BPU_FUNCTION_HPP
+#define BPU_FUNCTION_HPP
 #include <string>
 #include <iostream>
 #include <cstring>

@@ -1,5 +1,5 @@
-#ifndef MY_TIMER_HPP
-#define MY_TIMER_HPP
+#ifndef TIMER_HPP
+#define TIMER_HPP
 #include <iostream>
 #include <chrono>
 #include <vector>

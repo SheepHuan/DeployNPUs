@@ -1,4 +1,4 @@
-#include "MyBPU.hpp"
+#include "function.hpp"
 #include "Timer.hpp"
 #include "Helper.hpp"
 // 定义模型文件的路径
