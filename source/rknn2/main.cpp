@@ -33,7 +33,7 @@ static void dump_tensor_attr(rknn_tensor_attr *attr, bool is_input = true)
 
 int benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling);
 
-int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, std::tuple<double, double, double, double>>> &batch_perf_results);
+int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results);
 
 int main(int argc, char *argv[])
 {
@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
                 rknnFiles.push_back(entry.path());
             }
         }
-        std::vector<std::tuple<std::string, std::tuple<double, double, double, double>>> batch_perf_results;
+        std::vector<std::tuple<std::string, LatencyPerfData>> batch_perf_results;
         // 打印所有找到的文件
         for (const auto &file : rknnFiles)
         {
@@ -84,7 +84,11 @@ int main(int argc, char *argv[])
         pt_oss << "\nmodel\t avg\t std\t min\t max\n";
         for (const auto &perf_result : batch_perf_results)
         {
-            pt_oss << std::get<0>(perf_result) << "\t" << std::to_string(std::get<0>(std::get<1>(perf_result))) << "\t" << std::to_string(std::get<1>(std::get<1>(perf_result))) << "\t" << std::to_string(std::get<2>(std::get<1>(perf_result))) << "\t" << std::to_string(std::get<3>(std::get<1>(perf_result))) << "\n";
+            pt_oss <<std::get<0>(perf_result)
+            << "\tmean:" << std::to_string(std::get<1>(perf_result).mean) 
+            << "\tstd:" << std::to_string(std::get<1>(perf_result).stdev) 
+            << "\tmax:" << std::to_string(std::get<1>(perf_result).max) 
+            << "\tmin" << std::to_string(std::get<1>(perf_result).min) << "\n";
         }
         LOG(INFO) << pt_oss.str();
     }
@@ -103,7 +107,7 @@ int benchmark(const char *model, int num_warmup, int num_run, bool enable_profil
         LOG(ERROR) << "rknn_init fail! ret=" << ret << "\n";
         return -1;
     }
-
+LOG(INFO)<<"benchmark model:"<<model;
     // Get Model Input Output Number
     rknn_input_output_num io_num;
     ret = rknn_query(ctx, RKNN_QUERY_IN_OUT_NUM, &io_num, sizeof(io_num));
@@ -169,9 +173,8 @@ int benchmark(const char *model, int num_warmup, int num_run, bool enable_profil
         if (ret < 0)
         {
             LOG(ERROR) << "rknn_run fail! ret=" << ret << "\n";
-            // printf("rknn_run fail! ret=%d\n", ret);
-            // return -1;
         }
+        return ret;
     };
     Timer timer(num_warmup, num_run, benchmark_function, ctx);
     timer.run();
@@ -212,7 +215,7 @@ int benchmark(const char *model, int num_warmup, int num_run, bool enable_profil
     return 0;
 }
 
-int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, std::tuple<double, double, double, double>>> &batch_perf_results)
+int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results)
 {
     rknn_context ctx;
     int flag = RKNN_FLAG_COLLECT_PERF_MASK;

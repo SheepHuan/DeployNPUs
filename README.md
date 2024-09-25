@@ -10,7 +10,7 @@ git submodule update --init --recursive
 ## Support Platforms
 
 1. RKNN2
-    - RK3568 (2.0.0b23), 支持op profiling.
+    - RK3568 (2.2.0-2024-09-18), 支持op profiling. You can download SDK from [here](https://github.com/airockchip/rknn-toolkit2?tab=readme-ov-file#download).
 2. HIAI
     - Kirin9000
 3. BPU
