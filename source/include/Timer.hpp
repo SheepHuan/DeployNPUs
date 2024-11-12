@@ -81,7 +81,7 @@ private:
         double sq_sum = inner_product(durations.begin(), durations.end(), durations.begin(), 0.0);
         double stdev = sqrt(sq_sum / durations.size() - mean * mean);
 
-        cout << "Count:" << durations.size() << ", avg: " << mean << " us, std: " << stdev << " us, " << ", min: " << min_val << " us, " << "max: " << max_val << " us" << endl;
+        LOG(INFO)  << "Count:" << durations.size() << ", avg: " << mean << " us, std: " << stdev << " us, " << "min: " << min_val << " us, " << "max: " << max_val << " us" << endl;
         return {
             mean,
             stdev,
