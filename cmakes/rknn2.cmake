@@ -2,9 +2,9 @@
 option(BUILD_RKNN2 "Build rknn2" OFF)
 
 
-set(RKNN2_INCLUDE_DIR "/home/orangepi/code/DeployNPUs/sdks/2.0.0b23/runtime/Linux/librknn_api/include")
+set(RKNN2_INCLUDE_DIR "/home/orangepi/Code/DeployNPUs/sdks/rknn-toolkit2-v2.2.0-2024-09-18/rknpu2/runtime/Linux/librknn_api/include")
 
-set(RKNN2_LIBRARY_DIR "/home/orangepi/code/DeployNPUs/sdks/2.0.0b23/runtime/Linux/librknn_api/aarch64")
+set(RKNN2_LIBRARY_DIR "/home/orangepi/Code/DeployNPUs/sdks/rknn-toolkit2-v2.2.0-2024-09-18/rknpu2/runtime/Linux/librknn_api/aarch64")
 
 
 if (BUILD_RKNN2)
