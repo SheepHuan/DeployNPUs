@@ -15,3 +15,4 @@ include_directories(
 include(cmakes/dependency.cmake)
 include(cmakes/rknn2.cmake)
 include(cmakes/hbbpu.cmake)
+include(cmakes/hiai.cmake)
