@@ -17,8 +17,7 @@ int main(int argc, char **argv)
     FLAGS_log_prefix = true;       // 设置日志前缀是否应该添加到每行输出
     FLAGS_logbufsecs = 0;          // 设置可以缓冲日志的最大秒数，0指实时输出
 
-    lscpu();
-
+    
     return 0;
 }
 

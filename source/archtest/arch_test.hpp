@@ -209,6 +209,32 @@ std::vector<CacheInfo> getCpuCacheInfo(int coreId) {
 #endif
 }
 
+
+
+
+long getTotalMemorySize() {
+    std::ifstream meminfo("/proc/meminfo");
+    if (!meminfo.is_open()) {
+        std::cerr << "ERROR: Could not open /proc/meminfo" << std::endl;
+        return -1;
+    }
+
+    std::string line;
+    long totalMemory = -1;
+    while (std::getline(meminfo, line)) {
+        if (line.find("MemTotal:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string key;
+            iss >> key >> totalMemory;
+            totalMemory /= 1024; // Convert from kB to MB
+            break;
+        }
+    }
+
+    return totalMemory;
+}
+
+
 void printCpuInformation(const CpuInformation& cpuInfo) {
     std::cout << "CPU Model: " << cpuInfo.model << std::endl;
     std::cout << "Vendor: " << cpuInfo.vendor << std::endl;
@@ -230,5 +256,34 @@ void printCpuInformation(const CpuInformation& cpuInfo) {
         std::cout << std::endl;
     }
 }
+
+
+void testMemoryAccessSpeed(size_t blockSize) {
+	size_t totalBytes = 1024ull * 1024 * 1024 * 100; // 总共读写100GB的数据
+	size_t iterations = totalBytes / blockSize;
+	std::vector<size_t> buffer(blockSize / sizeof(size_t));
+	// 初始化计时器
+	auto start = std::chrono::high_resolution_clock::now();
+	// 执行读写操作
+	for (size_t i = 0; i < iterations; ++i) {
+		memset(buffer.data(), 551546, buffer.size() * sizeof(size_t));
+	}
+	// 记录结束时间
+	auto end = std::chrono::high_resolution_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+	// 输出结果
+	if (blockSize > 1024 * 1024) {
+		std::cout << "Block Size (MB): " << blockSize / 1024 / 1024 << ", Time (ms): " << duration.count() << " Loops:"<< iterations << std::endl;
+	}
+	else if (blockSize > 1024) {
+		std::cout << "Block Size (KB): " << blockSize / 1024 << ", Time (ms): " << duration.count() << " Loops:" << iterations << std::endl;
+	}
+	else {
+		std::cout << "Block Size ( B): " << blockSize << ", Time (ms): " << duration.count() << " Loops:" << iterations << std::endl;
+	}
+}
+
+
 
 #endif
