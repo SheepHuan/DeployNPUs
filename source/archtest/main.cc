@@ -1,12 +1,11 @@
 #include "glog/logging.h"
 #include "gflags/gflags.h"
 #include "tabulate.hpp"
-
 #include <unistd.h>
-
+#include <iostream>
+#include "arch_test.hpp"
 
 void lscpu();
-
 
 int main(int argc, char **argv)
 {
@@ -18,5 +17,36 @@ int main(int argc, char **argv)
     FLAGS_log_prefix = true;       // 设置日志前缀是否应该添加到每行输出
     FLAGS_logbufsecs = 0;          // 设置可以缓冲日志的最大秒数，0指实时输出
 
+    lscpu();
+
     return 0;
+}
+
+void lscpu()
+{
+
+    struct CpuInformation cpuInfo;
+#if defined(__linux__) || defined(linux)
+    LOG(INFO) << "Operating system is Linux.";
+#endif
+
+    cpuInfo.model = getCpuModel();
+    cpuInfo.vendor = getVendor();
+    cpuInfo.architecture = getArchitecture();
+    cpuInfo.coreCount = getCoreCount();
+
+    if (cpuInfo.coreCount > 0)
+    {
+        for (int coreId = 0; coreId < cpuInfo.coreCount; coreId++)
+        {
+            struct CpuCoreInformation coreInfo;
+            coreInfo.coreId = coreId;
+            coreInfo.availableFrequencies = getCoreAvailableFrequencies(coreId);
+            coreInfo.cacheInfoList = getCpuCacheInfo(coreId);
+
+            cpuInfo.coresInformationList.push_back(coreInfo);
+        }
+    }
+
+    printCpuInformation(cpuInfo);
 }
