@@ -124,13 +124,33 @@ int getCoreCount() {
 
 std::vector<float> getCoreAvailableFrequencies(int coreId) {
 #if defined(__linux__) && (defined(__x86_64__) || defined(__i386__))
+    std::vector<float> frequencies;
     std::string path = "/sys/devices/system/cpu/cpu" + std::to_string(coreId) + "/cpufreq/scaling_available_frequencies";
     std::ifstream freqFile(path);
 
-    std::vector<float> frequencies;
-
     if (!freqFile.is_open()) {
-        std::cerr << "ERROR: Could not open frequency file for core " << coreId << std::endl;
+        std::cerr << "WARNING: Could not open scaling_available_frequencies for core " << coreId << std::endl;
+
+        // Try to read max and min frequencies
+        std::string maxFreqPath = "/sys/devices/system/cpu/cpu" + std::to_string(coreId) + "/cpufreq/cpuinfo_max_freq";
+        std::string minFreqPath = "/sys/devices/system/cpu/cpu" + std::to_string(coreId) + "/cpufreq/cpuinfo_min_freq";
+        std::ifstream maxFreqFile(maxFreqPath);
+        std::ifstream minFreqFile(minFreqPath);
+
+        if (maxFreqFile.is_open() && minFreqFile.is_open()) {
+            std::string maxFreqStr, minFreqStr;
+            std::getline(maxFreqFile, maxFreqStr);
+            std::getline(minFreqFile, minFreqStr);
+
+            float maxFreq = std::stof(maxFreqStr) / 1000.0; // Convert kHz to MHz
+            float minFreq = std::stof(minFreqStr) / 1000.0; // Convert kHz to MHz
+
+            frequencies.push_back(minFreq);
+            frequencies.push_back(maxFreq);
+        } else {
+            std::cerr << "ERROR: Could not open max/min frequency files for core " << coreId << std::endl;
+        }
+
         return frequencies;
     }
 
@@ -150,6 +170,7 @@ std::vector<float> getCoreAvailableFrequencies(int coreId) {
     return {};
 #endif
 }
+
 
 std::vector<CacheInfo> getCpuCacheInfo(int coreId) {
 #if defined(__linux__) && (defined(__x86_64__) || defined(__i386__))
