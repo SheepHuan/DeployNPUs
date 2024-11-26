@@ -30,11 +30,11 @@ DEFINE_bool(enable_profiling, false, "Flag to enable profiling of individual ope
 // 批量基准测试
 DEFINE_bool(enable_batch_benchmark, false, "Flag to enable batch benchmark performance.");
 
-#define CHECK_STATUS(ret)                                                                                        \
-    if ((ret) != hiai::SUCCESS)                                                                                  \
-    {                                                                                                            \
-        LOG(INFO) << "Error: " << __FILE__ << ":" << __LINE__ << ":" << __FUNCTION__ << ":" << ret << std::endl; \
-       exit(-1) ;                                                                                             \
+#define CHECK_STATUS(ret)                                                                                         \
+    if ((ret) != hiai::SUCCESS)                                                                                   \
+    {                                                                                                             \
+        LOG(ERROR) << "Error: " << __FILE__ << ":" << __LINE__ << ":" << __FUNCTION__ << ":" << ret << std::endl; \
+        exit(-1);                                                                                                 \
     }
 
 int batch_benchmark(const char *model_path, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results);
@@ -84,20 +84,18 @@ int main(int argc, char **argv)
         {
 
             profileTable.add_row({std::get<0>(perf_result),
-                            std::to_string(std::get<1>(perf_result).mean),
-                            std::to_string(std::get<1>(perf_result).stdev),
-                            std::to_string(std::get<1>(perf_result).max),
-                            std::to_string(std::get<1>(perf_result).min)});
+                                  std::to_string(std::get<1>(perf_result).mean),
+                                  std::to_string(std::get<1>(perf_result).stdev),
+                                  std::to_string(std::get<1>(perf_result).max),
+                                  std::to_string(std::get<1>(perf_result).min)});
         }
-          // center-align and color header cells
-        for (size_t i = 0; i < 5; ++i) {
-            profileTable[0][i].format()
-            .font_color(tabulate::Color::yellow)
-            .font_align(tabulate::FontAlign::center)
-            .font_style({tabulate::FontStyle::bold});
+        // center-align and color header cells
+        for (size_t i = 0; i < 5; ++i)
+        {
+            profileTable[0][i].format().font_color(tabulate::Color::yellow).font_align(tabulate::FontAlign::center).font_style({tabulate::FontStyle::bold});
         }
-        LOG(INFO) <<"\n" <<profileTable <<"\n";
-        
+        LOG(INFO) << "\n"
+                  << profileTable << "\n";
     }
     google::ShutdownGoogleLogging();
     return 0;
@@ -105,7 +103,7 @@ int main(int argc, char **argv)
 
 int batch_benchmark(const char *model_path, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results)
 {
-    LOG(INFO)<<"Profiling model:"<< model_path;
+    LOG(INFO) << "Profiling model:" << model_path;
     // 第一阶段
     hiai::Status ret;
 
@@ -133,7 +131,7 @@ int batch_benchmark(const char *model_path, int num_warmup, int num_run, bool en
         std::shared_ptr<hiai::INDTensorBuffer> outputTensorBuffer = hiai::CreateNDTensorBuffer(outputDesc[i]);
         outputTensors.push_back(outputTensorBuffer);
     }
-   
+
     auto benchmark_function = [](std::shared_ptr<hiai::IModelManager> modelManager, std::vector<std::shared_ptr<hiai::INDTensorBuffer>> inputTensors, std::vector<std::shared_ptr<hiai::INDTensorBuffer>> outputTensors)
     {
         CHECK_STATUS(modelManager->Run(*(const_cast<std::vector<std::shared_ptr<hiai::INDTensorBuffer>> *>(&inputTensors)), *(const_cast<std::vector<std::shared_ptr<hiai::INDTensorBuffer>> *>(&outputTensors))));
@@ -143,6 +141,6 @@ int batch_benchmark(const char *model_path, int num_warmup, int num_run, bool en
     timer.run();
     auto data = timer.report();
     batch_perf_results.push_back(std::make_tuple(model_path, std::get<1>(data)));
-   
+
     return 0;
 }

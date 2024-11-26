@@ -1,10 +1,6 @@
-<<<<<<<< HEAD:source/bpu/function.h
 #ifndef BPU_FUCNTION_H
 #define BPU_FUCNTION_H
-========
-#ifndef BPU_FUNCTION_HPP
-#define BPU_FUNCTION_HPP
->>>>>>>> 604bc2cd51ca75c369e3a2e5a4e7b686eb641f2d:source/bpu/function.hpp
+
 #include <string>
 #include <iostream>
 #include <cstring>

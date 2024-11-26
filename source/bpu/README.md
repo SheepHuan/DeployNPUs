@@ -5,6 +5,10 @@ mkdir build && cd build
 cmake .. -DBUILD_HBBPU=ON
 make -j
 
-./hbpu_test --model /home/sunrise/DeployNPUs/saves/onnx-10/YoLoV3-opset10_output/YoLoV3-opset10_prefix.bin
+./hbpu_test \
+--enable_batch_benchmark true \
+--model /home/sunrise/DeployNPUs/saves/bins \
+--num_warmup 3 \
+--num_run 10
 
 ```

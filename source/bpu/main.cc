@@ -1,6 +1,15 @@
 #include "function.h"
 #include "Timer.h"
 #include "Helper.h"
+#include "tabulate.hpp"
+
+#define CHECK_STATUS(ret)                                                                                         \
+    if ((ret) != HB_SYS_SUCCESS)                                                                                  \
+    {                                                                                                             \
+        LOG(ERROR) << "Error: " << __FILE__ << ":" << __LINE__ << ":" << __FUNCTION__ << ":" << ret << std::endl; \
+        exit(-1);                                                                                                 \
+    }
+
 // 定义模型文件的路径
 DEFINE_string(model, "path", "The file path to the hbdnn model.");
 
@@ -50,13 +59,28 @@ int main(int argc, char **argv)
             batch_benchmark(path.c_str(), num_warmup, num_run, enable_profiling, batch_perf_results);
         }
     }
-    std::ostringstream pt_oss;
-    pt_oss << "\nmodel\t avg\t std\t min\t max\n";
+
+    tabulate::Table profileTable;
+    profileTable.add_row({"index", "model", "avg", "std", "min", "max"});
+    int iteration = 0;
     for (const auto &perf_result : batch_perf_results)
     {
-        pt_oss << std::get<0>(perf_result) << "\t" << std::to_string(std::get<1>(perf_result).mean) << "\t" << std::to_string(std::get<1>(perf_result).stdev) << "\t" << std::to_string(std::get<1>(perf_result).min) << "\t" << std::to_string(std::get<1>(perf_result).max) << "\n";
+
+        profileTable.add_row({std::to_string(iteration),
+                              std::get<0>(perf_result),
+                              std::to_string(std::get<1>(perf_result).mean),
+                              std::to_string(std::get<1>(perf_result).stdev),
+                              std::to_string(std::get<1>(perf_result).max),
+                              std::to_string(std::get<1>(perf_result).min)});
+        ++iteration;
     }
-    LOG(INFO) << pt_oss.str();
+    // center-align and color header cells
+    for (size_t i = 0; i < 5; ++i)
+    {
+        profileTable[0][i].format().font_color(tabulate::Color::yellow).font_align(tabulate::FontAlign::center).font_style({tabulate::FontStyle::bold});
+    }
+    LOG(INFO) << "\n"
+              << profileTable << "\n";
     google::ShutdownGoogleLogging();
     return 0;
 }
@@ -68,91 +92,49 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
     hbDNNHandle_t dnnHandle;
 
     modelFileNames[0] = model;
-    int ret = hbDNNInitializeFromFiles(&packedDNNHandle, modelFileNames, 1);
-    if (ret != HB_SYS_SUCCESS)
-    {
-        LOG(ERROR) << "Failed to initialize packed DNN.";
-        return -1;
-    }
+    CHECK_STATUS(hbDNNInitializeFromFiles(&packedDNNHandle, modelFileNames, 1));
     char const **modelNameList = nullptr;
     int32_t modelNameCount;
-    ret = hbDNNGetModelNameList(&modelNameList,
-                                &modelNameCount,
-                                packedDNNHandle);
+    CHECK_STATUS(hbDNNGetModelNameList(&modelNameList,
+                                       &modelNameCount,
+                                       packedDNNHandle));
 
-    if (ret != HB_SYS_SUCCESS)
-    {
-        LOG(ERROR) << "Failed to get model name list.";
-        return -1;
-    }
     for (int i = 0; i < modelNameCount; i++)
     {
         LOG(INFO) << "modelName: " << modelNameList[i];
-        ret = hbDNNGetModelHandle(&dnnHandle,
-                                  packedDNNHandle,
-                                  modelNameList[i]);
-        if (ret != HB_SYS_SUCCESS)
-        {
-            LOG(ERROR) << "Failed to get model handle.";
-            return -1;
-        }
+        CHECK_STATUS(hbDNNGetModelHandle(&dnnHandle,
+                                         packedDNNHandle,
+                                         modelNameList[i]));
         int32_t inputCount;
-        ret = hbDNNGetInputCount(&inputCount, dnnHandle);
-        if (ret != HB_SYS_SUCCESS)
-        {
-            LOG(ERROR) << "Failed to get input count.";
-            return -1;
-        }
-        LOG(INFO) << "inputCount: " << inputCount;
+        CHECK_STATUS(hbDNNGetInputCount(&inputCount, dnnHandle));
+
+        // LOG(INFO) << "inputCount: " << inputCount;
         int32_t outputCount;
-        ret = hbDNNGetOutputCount(&outputCount, dnnHandle);
-        if (ret != HB_SYS_SUCCESS)
-        {
-            LOG(ERROR) << "Failed to get output count.";
-            return -1;
-        }
+        CHECK_STATUS(hbDNNGetOutputCount(&outputCount, dnnHandle));
 
         hbDNNTensorProperties *inputProperties = new hbDNNTensorProperties[inputCount];
         hbDNNTensor *inputTensor = new hbDNNTensor[inputCount];
         for (int index = 0; index < inputCount; index++)
         {
-            ret = hbDNNGetInputTensorProperties(&inputProperties[index], dnnHandle, index);
-            if (ret != HB_SYS_SUCCESS)
-            {
-                LOG(ERROR) << "Failed to get input tensor properties.";
-                return -1;
-            }
+            CHECK_STATUS(hbDNNGetInputTensorProperties(&inputProperties[index], dnnHandle, index));
+
             const char *inputName;
-            ret = hbDNNGetInputName(&inputName, dnnHandle, index);
+            CHECK_STATUS(hbDNNGetInputName(&inputName, dnnHandle, index));
             dump_tensor_properties(index, inputName, inputProperties[index], true);
 
             inputTensor[index].properties = inputProperties[index];
             uint32_t size = inputTensor[index].properties.alignedByteSize;
-            ret = hbSysAllocMem(&inputTensor[index].sysMem[0], size);
-            if (ret != HB_SYS_SUCCESS)
-            {
-                LOG(ERROR) << "Failed to allocate input tensor memory.";
-                return -1;
-            }
+            CHECK_STATUS(hbSysAllocMem(&inputTensor[index].sysMem[0], size));
         }
         hbDNNTensorProperties *outputProperties = new hbDNNTensorProperties[outputCount];
         hbDNNTensor *outputTensor = new hbDNNTensor[outputCount];
         for (int index = 0; index < outputCount; index++)
         {
-            ret = hbDNNGetOutputTensorProperties(&outputProperties[index], dnnHandle, index);
-            if (ret != HB_SYS_SUCCESS)
-            {
-                LOG(ERROR) << "Failed to get output tensor properties.";
-                return -1;
-            }
+            CHECK_STATUS(hbDNNGetOutputTensorProperties(&outputProperties[index], dnnHandle, index));
+
             outputTensor[index].properties = outputProperties[index];
             uint32_t size = outputTensor[index].properties.alignedByteSize;
-            ret = hbSysAllocMem(&outputTensor[index].sysMem[0], size);
-            if (ret != HB_SYS_SUCCESS)
-            {
-                LOG(ERROR) << "Failed to allocate output tensor memory.";
-                return -1;
-            }
+            CHECK_STATUS(hbSysAllocMem(&outputTensor[index].sysMem[0], size))
         }
 
         auto benchmark_function = [](hbDNNHandle_t dnnHandle, hbDNNTensor *inputTensor, hbDNNTensor *outputTensor)
@@ -190,12 +172,23 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         timer.run();
         auto data = timer.report();
         batch_perf_results.push_back(std::make_tuple(model, std::get<1>(data)));
+        for (int index = 0; index < inputCount; index++)
+        {
+            CHECK_STATUS(hbSysFreeMem(inputTensor[index].sysMem));
+        }
+        for (int index = 0; index < outputCount; index++)
+        {
+            CHECK_STATUS(hbSysFreeMem(outputTensor[index].sysMem));
+        }
 
         delete[] inputProperties;
         delete[] outputProperties;
         delete[] inputTensor;
         delete[] outputTensor;
+    
     }
+
+    CHECK_STATUS(hbDNNRelease(packedDNNHandle));
 
     delete[] modelFileNames;
     return 0;
