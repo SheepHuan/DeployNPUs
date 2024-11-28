@@ -8,6 +8,12 @@ cmake --build .  --config Release --parallel 12
 
 $env:PATH += ";E:\workspace\code\openvino\build\install\runtime\bin\intel64\Release"
 
+
+
+./openvino_test --model "D:\Downloads\deafault\ResNet50-opset12.xml" --bin "D:\Downloads\deafault\ResNet50-opset12.bin" --num_run 20
+
+./openvino_test --model "D:\Downloads\deafault\MobileNetV2-opset12.xml" --bin "D:\Downloads\deafault\MobileNetV2-opset12.bin" --num_run 20
+
 ```
 
 

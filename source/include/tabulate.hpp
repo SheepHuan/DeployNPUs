@@ -6,7 +6,9 @@
 // (See accompanying file LICENSE.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #pragma once
-
+#define NOMINMAX
+#define _HAS_STD_BYTE 0
+#define WIN32_LEAN_AND_MEAN
 #ifndef NONSTD_VARIANT_LITE_HPP
 #define NONSTD_VARIANT_LITE_HPP
 
