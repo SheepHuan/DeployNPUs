@@ -34,7 +34,25 @@ int main(int argc, char **argv)
     int num_run = FLAGS_num_run;
     bool enable_profiling = false;
     bool enable_batch_benchmark = true;
-    // LOG(INFO) << "model: " << model;
+
+    std::vector<std::tuple<std::string, LatencyPerfData>> batch_perf_results;
+
+    if (std::filesystem::is_regular_file(model))
+    {
+        auto bin_path = std::filesystem::path(model);
+        bin_path.replace_extension(".bin");
+        if (std::filesystem::exists(bin_path))
+        {
+            batch_benchmark(model.c_str(), bin_path.string().c_str(),
+                            num_warmup, num_run, enable_profiling, batch_perf_results);
+        }
+        else
+        {
+            LOG(ERROR) << "Cannot find corresponding .bin file for: " << model;
+            return -1;
+        }
+    }
+    else if (std::filesystem::is_directory(model))
     {
         std::string directoryPath = model;
 
@@ -59,7 +77,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-        std::vector<std::tuple<std::string, LatencyPerfData>> batch_perf_results;
+
         // 打印所有找到的文件
         for (size_t i = 0; i < modelFiles.size(); i++)
         {
@@ -68,18 +86,41 @@ int main(int argc, char **argv)
             LOG(INFO) << "model_file: " << model_file.string() << ", bin_file: " << bin_file.string();
             batch_benchmark(model_file.string().c_str(), bin_file.string().c_str(), num_warmup, num_run, enable_profiling, batch_perf_results);
         }
-        std::ostringstream pt_oss;
+    }
+    if (batch_perf_results.size() > 0)
+    {
+        // tabulate::Table profileTable;
+        // profileTable.add_row({"model", "avg", "std", "min", "max"});
+        // for (const auto &perf_result : batch_perf_results)
+        // {
+
+        //     profileTable.add_row({std::get<0>(perf_result),
+        //                           std::to_string(std::get<1>(perf_result).mean),
+        //                           std::to_string(std::get<1>(perf_result).stdev),
+        //                           std::to_string(std::get<1>(perf_result).max),
+        //                           std::to_string(std::get<1>(perf_result).min)});
+        // }
+        // // center-align and color header cells
+        // for (size_t i = 0; i < 5; ++i)
+        // {
+        //     profileTable[0][i].format().font_color(tabulate::Color::yellow).font_align(tabulate::FontAlign::center).font_style({tabulate::FontStyle::bold});
+        // }
+        // LOG(INFO) << "\n"
+        //           << profileTable << "\n";
+
         tabulate::Table profileTable;
-        // pt_oss << "\nmodel\t avg\t std\t min\t max\n";
-        profileTable.add_row({"model", "avg", "std", "min", "max"});
+        profileTable.add_row({"index", "model", "avg", "std", "min", "max"});
+        int iteration = 0;
         for (const auto &perf_result : batch_perf_results)
         {
 
-            profileTable.add_row({std::get<0>(perf_result),
+            profileTable.add_row({std::to_string(iteration),
+                                  std::get<0>(perf_result),
                                   std::to_string(std::get<1>(perf_result).mean),
                                   std::to_string(std::get<1>(perf_result).stdev),
                                   std::to_string(std::get<1>(perf_result).max),
                                   std::to_string(std::get<1>(perf_result).min)});
+            ++iteration;
         }
         // center-align and color header cells
         for (size_t i = 0; i < 5; ++i)
@@ -89,6 +130,7 @@ int main(int argc, char **argv)
         LOG(INFO) << "\n"
                   << profileTable << "\n";
     }
+
     google::ShutdownGoogleLogging();
     return 0;
 }
@@ -148,6 +190,7 @@ void copy_tensor_data(ov::Tensor &dst, const ov::Tensor &src)
 int batch_benchmark(const char *model_path, const char *bin_path, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results)
 {
     ov::shutdown();
+    // ov::enable_profiling();
     LOG(INFO) << "Profiling model:" << model_path;
     // -------- Get OpenVINO runtime version --------
     ov::Version version = ov::get_openvino_version();
@@ -165,24 +208,23 @@ int batch_benchmark(const char *model_path, const char *bin_path, int num_warmup
     std::vector<ov::Output<const ov::Node>> modelInputs = compiledModel.inputs();
     std::vector<ov::Output<const ov::Node>> modelOutputs = compiledModel.outputs();
     ov::InferRequest inferRequest = compiledModel.create_infer_request();
-    // for (size_t j = 0; j < modelInputs.size(); j++)
-    // {
-    //     const auto &input = modelInputs[j];
-    //     const auto &shape = input.get_shape();
+    for (size_t j = 0; j < modelInputs.size(); j++)
+    {
+        const auto &input = modelInputs[j];
+        const auto &shape = input.get_shape();
 
-    //     // 创建随机输入数据
-    //     size_t input_size = ov::shape_size(shape);
-    //     std::vector<float> input_data(input_size);
-    //     // 创建输入张量
-    //     ov::Tensor input_tensor(input.get_element_type(), shape, input_data.data());
+        // 创建随机输入数据
+        size_t input_size = ov::shape_size(shape);
+        std::vector<float> input_data(input_size);
+        // 创建输入张量
+        ov::Tensor input_tensor(input.get_element_type(), shape, input_data.data());
 
-    //      auto requestTensor = inferRequest.get_tensor(input.get_any_name());
-    //      copy_tensor_data(requestTensor, input_tensor);
-    // }
+        auto requestTensor = inferRequest.get_tensor(input.get_any_name());
+        copy_tensor_data(requestTensor, input_tensor);
+    }
     auto benchmark_function = [](ov::InferRequest inferRequest)
     {
         inferRequest.infer();
-        // printf("infer done\n");
     };
     // 释放资源
     modelInputs.clear();
