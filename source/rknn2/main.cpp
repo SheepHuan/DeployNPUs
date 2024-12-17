@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <iostream>
 #include <filesystem>
+#include <fstream>
 #include <cstring>
 #include "glog/logging.h"
 #include "gflags/gflags.h"
@@ -9,6 +10,8 @@
 #include <tuple>
 #include <vector>
 #include "tabulate.hpp"
+#include "nlohmann/json.hpp"
+#include <chrono>
 
 // 定义模型文件的路径
 DEFINE_string(model, "path", "The file path to the rknn model.");
@@ -18,6 +21,9 @@ DEFINE_int32(num_warmup, 10, "The number of warmup runs before actual benchmarki
 
 // 定义实际运行的次数，用于获取模型性能的平均值
 DEFINE_int32(num_run, 10, "The number of runs to measure the model's performance.");
+
+// 定义输出文件路径
+DEFINE_string(output_file, "output/rknn_profile_result.json", "The file path to the output json file.");
 
 // 是否对操作进行性能分析，如果设置为true，将输出操作级别的性能数据
 DEFINE_bool(enable_profiling, false, "Flag to enable profiling of individual operations within the model.");
@@ -29,8 +35,7 @@ static void dump_tensor_attr(rknn_tensor_attr *attr, bool is_input = true)
               << ", dims=[" << attr->dims[0] << ", " << attr->dims[1] << ", " << attr->dims[2] << ", " << attr->dims[3] << "], fmt=" << get_format_string(attr->fmt) << ", n_elems=" << attr->n_elems << ", size=" << attr->size << ", type=" << get_type_string(attr->type) << ", qnt_type=" << get_qnt_type_string(attr->qnt_type) << ", zp=" << attr->zp << ", scale=" << attr->scale;
 }
 
-
-int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results);
+int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results, nlohmann::json &result);
 
 int main(int argc, char *argv[])
 {
@@ -48,6 +53,7 @@ int main(int argc, char *argv[])
     bool enable_profiling = FLAGS_enable_profiling;
 
     std::vector<std::tuple<std::string, LatencyPerfData>> batch_perf_results;
+    nlohmann::json all_models_result;  // 创建总的JSON对象
 
     // 检查输入路径是否为目录
     if (std::filesystem::is_directory(model_path))
@@ -67,76 +73,61 @@ int main(int argc, char *argv[])
         // 对每个找到的模型文件进行测试
         for (const auto &file : rknn_files)
         {
-            batch_benchmark(file.string().c_str(), num_warmup, num_run, enable_profiling, batch_perf_results);
+            nlohmann::json model_result;  // 单个模型的结果
+            batch_benchmark(file.string().c_str(), num_warmup, num_run, enable_profiling, batch_perf_results, model_result);
+            all_models_result.push_back(model_result);  // 添加到总结果中
         }
-
-        tabulate::Table profileTable;
-        profileTable.add_row({"index", "model", "avg", "std", "min", "max"});
-        int iteration = 0;
-        for (const auto &perf_result : batch_perf_results)
-        {
-
-            profileTable.add_row({std::to_string(iteration),
-                                  std::get<0>(perf_result),
-                                  std::to_string(std::get<1>(perf_result).mean),
-                                  std::to_string(std::get<1>(perf_result).stdev),
-                                  std::to_string(std::get<1>(perf_result).max),
-                                  std::to_string(std::get<1>(perf_result).min)});
-            ++iteration;
-        }
-        // center-align and color header cells
-        for (size_t i = 0; i < 5; ++i)
-        {
-            profileTable[0][i].format().font_color(tabulate::Color::yellow).font_align(tabulate::FontAlign::center).font_style({tabulate::FontStyle::bold});
-        }
-        LOG(INFO) << "\n"
-                  << profileTable << "\n";
     }
     else
     {
         // 修改单个模型文件测试逻辑
-        batch_benchmark(model_path.c_str(), num_warmup, num_run, enable_profiling, batch_perf_results);
-        
-        // 创建结果表格
-        tabulate::Table profileTable;
-        profileTable.add_row({"index", "model", "avg", "std", "min", "max"});
-        
-        // 添加结果到表格
-        const auto &perf_result = batch_perf_results[0];
-        profileTable.add_row({"0",
-                            std::get<0>(perf_result),
-                            std::to_string(std::get<1>(perf_result).mean),
-                            std::to_string(std::get<1>(perf_result).stdev),
-                            std::to_string(std::get<1>(perf_result).max),
-                            std::to_string(std::get<1>(perf_result).min)});
-        
-        // 设置表格样式
-        for (size_t i = 0; i < 5; ++i) {
-            profileTable[0][i].format()
-                .font_color(tabulate::Color::yellow)
-                .font_align(tabulate::FontAlign::center)
-                .font_style({tabulate::FontStyle::bold});
-        }
-        
-        LOG(INFO) << "\n" << profileTable << "\n";
+        nlohmann::json model_result;
+        batch_benchmark(model_path.c_str(), num_warmup, num_run, enable_profiling, batch_perf_results, model_result);
+        all_models_result.push_back(model_result);
     }
+
+    // 创建输出目录（如果不存在）
+    std::filesystem::path output_path(FLAGS_output_file);
+    std::filesystem::create_directories(output_path.parent_path());
+
+    // 保存所有结果到指定的输出文件
+    std::ofstream json_file(FLAGS_output_file);
+    json_file << std::setw(4) << all_models_result << std::endl;
 
     google::ShutdownGoogleLogging();
     return 0;
 }
 
-
-int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results)
+int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results, nlohmann::json &result)
 {
     LOG(INFO) << "Profiling model:" << model;
     rknn_context ctx;
     int flag = RKNN_FLAG_COLLECT_PERF_MASK;
+    
+    // 添加初始化时间统计
+    auto init_start = std::chrono::high_resolution_clock::now();
     int ret = rknn_init(&ctx, (void *)model, 0, flag, nullptr);
+    auto init_end = std::chrono::high_resolution_clock::now();
+    double init_time = std::chrono::duration<double, std::milli>(init_end - init_start).count();
 
     if (ret < 0)
     {
         LOG(ERROR) << "rknn_init fail! ret=" << ret << "\n";
         return -1;
+    }
+    
+    LOG(INFO) << "Model initialization time: " << init_time << " ms";
+
+    // 在模型初始化后，查询内存使用情况
+    rknn_mem_size mem_size;
+    ret = rknn_query(ctx, RKNN_QUERY_MEM_SIZE, &mem_size, sizeof(mem_size));
+    if (ret != RKNN_SUCC) {
+        LOG(ERROR) << "Failed to query memory size, ret=" << ret;
+    } else {
+        LOG(INFO) << "Model memory usage:";
+        LOG(INFO) << "  total memory size: " << mem_size.total_weight_size / 1024.0 / 1024.0 << " MB";
+        LOG(INFO) << "  weight memory size: " << mem_size.total_weight_size / 1024.0 / 1024.0 << " MB";
+        LOG(INFO) << "  internal memory size: " << mem_size.total_internal_size / 1024.0 / 1024.0 << " MB";
     }
 
     // Get Model Input Output Number
@@ -209,7 +200,7 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         }
     };
     Timer timer(num_warmup, num_run, benchmark_function, ctx);
-   
+
     timer.run();
     auto data = timer.report();
     batch_perf_results.push_back(std::make_tuple(model, std::get<1>(data)));
@@ -221,12 +212,35 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         // printf("rknn_outputs_get fail! ret=%d\n", ret);
     }
     rknn_perf_detail perf_detail;
+
+    // 在模型运行完成后，查询性能详情
     ret = rknn_query(ctx, RKNN_QUERY_PERF_DETAIL, &perf_detail, sizeof(perf_detail));
-    if (enable_profiling)
-    {
-        LOG(INFO) << "Model OPs Performace Data:\n"
-                  << perf_detail.perf_data << "\n";
+    if (ret != RKNN_SUCC) {
+        LOG(ERROR) << "Failed to query performance detail, ret=" << ret;
+    } else if (enable_profiling) {
+        LOG(INFO) << "Performance detail:";
+        LOG(INFO) << perf_detail.perf_data;
+        
+        // 将性能详情添加到JSON结果中
+        result["ModelAnalysisResult"]["RKNN_API_PerformanceDetail"] = perf_detail.perf_data;
     }
+
+    // // 查询运行时性能数据
+    // rknn_perf_run perf_run;
+    // ret = rknn_query(ctx, RKNN_QUERY_PERF_RUN, &perf_run, sizeof(perf_run));
+    // if (ret != RKNN_SUCC) {
+    //     LOG(ERROR) << "Failed to query performance run, ret=" << ret;
+    // } else {
+    //     LOG(INFO) << "Performance run:";
+    //     LOG(INFO) << "  system occupy CPU ratio: " << perf_run.run_duration << " us";
+    //     // LOG(INFO) << "  NPU running time: " << perf_run.execute_time << " us";
+    //     // LOG(INFO) << "  CPU running time: " << perf_run.cpu_execute_time << " us";
+        
+    //     // // 将运行时性能数据添加到JSON结果中
+    //     // result["ModelAnalysisResult"]["RuntimeResult"]["SystemOccupyCPURatio"] = perf_run.system_occupy_ratio;
+    //     // result["ModelAnalysisResult"]["RuntimeResult"]["NPUExecuteTime"] = perf_run.execute_time;
+    //     // result["ModelAnalysisResult"]["RuntimeResult"]["CPUExecuteTime"] = perf_run.cpu_execute_time;
+    // }
 
     for (int i = 0; i < io_num.n_input; i++)
     {
@@ -243,6 +257,49 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         }
     }
     rknn_destroy(ctx);
+
+    // 设置模型分析结果
+    result["ModelAnalysisResult"]["RuntimeResult"]["Warmups"] = num_warmup;
+    result["ModelAnalysisResult"]["RuntimeResult"]["Rounds"] = num_run;
+    result["ModelAnalysisResult"]["RuntimeResult"]["InitTime"] = init_time;
+    result["ModelAnalysisResult"]["RuntimeResult"]["InitMemory"] = mem_size.total_weight_size / 1024.0 / 1024.0;  // 转换为 MB
+    
+    // 设置平均延迟等统计数据
+    result["ModelAnalysisResult"]["RuntimeResult"]["AvgTotalRoundLatency"] = std::get<1>(data).mean;
+    result["ModelAnalysisResult"]["RuntimeResult"]["AvgPeakMemory"] = 
+        (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;  // 总内存使用（MB）
+    result["ModelAnalysisResult"]["RuntimeResult"]["AvgPeakPower"] = 0.0;  // 如果有功耗数据，在这里设置
+    result["ModelAnalysisResult"]["RuntimeResult"]["StdTotalRoundLatency"] = std::get<1>(data).stdev;
+    result["ModelAnalysisResult"]["RuntimeResult"]["MinTotalRoundLatency"] = std::get<1>(data).min;
+    result["ModelAnalysisResult"]["RuntimeResult"]["MaxTotalRoundLatency"] = std::get<1>(data).max;
+    
+    // 添加每轮运行结果
+    const auto& raw_times = timer.durations_warmup_;  // 预热轮次
+    for(size_t i = 0; i < raw_times.size(); i++) {
+        nlohmann::json round;
+        round["RoundIndex"] = -1;
+        round["WarmupIndex"] = i;
+        round["TotalRoundLatency"] = raw_times[i];
+        round["TotalRoundPeakMemory"] = 
+            (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;
+        round["TotalRoundAvgPower"] = 0.0;  // 如果有功耗数据，在这里设置
+        result["ModelAnalysisResult"]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
+    }
+    
+    const auto& normal_times = timer.durations_normal_;  // 正式运行轮次
+    for(size_t i = 0; i < normal_times.size(); i++) {
+        nlohmann::json round;
+        round["RoundIndex"] = i;
+        round["WarmupIndex"] = -1;
+        round["TotalRoundLatency"] = normal_times[i];
+        round["TotalRoundPeakMemory"] = 
+            (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;
+        round["TotalRoundAvgPower"] = 0.0;  // 如果有功耗数据，在这里设置
+        result["ModelAnalysisResult"]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
+    }
+
+    
+
     LOG(INFO) << "Profiling model:" << model << " done!";
     return 0;
 }

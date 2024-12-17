@@ -59,7 +59,7 @@ public:
         return std::make_tuple(warmup_data, normal_data);
     }
 
-private:
+// private:
     int warmup_iters_;
     int normal_iters_;
     function<void()> func_;
