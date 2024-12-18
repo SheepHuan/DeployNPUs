@@ -12,6 +12,7 @@
 #include "tabulate.hpp"
 #include "nlohmann/json.hpp"
 #include <chrono>
+#include <sys/utsname.h>
 
 // 定义模型文件的路径
 DEFINE_string(model, "path", "The file path to the rknn model.");
@@ -100,7 +101,9 @@ int main(int argc, char *argv[])
 
 int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_profiling, std::vector<std::tuple<std::string, LatencyPerfData>> &batch_perf_results, nlohmann::json &result)
 {
-    LOG(INFO) << "Profiling model:" << model;
+    // 获取模型文件名(不包含路径)
+    std::string model_name = std::filesystem::path(model).filename().string();
+    LOG(INFO) << "Profiling model:" << model_name;
     rknn_context ctx;
     int flag = RKNN_FLAG_COLLECT_PERF_MASK;
     
@@ -218,29 +221,13 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
     if (ret != RKNN_SUCC) {
         LOG(ERROR) << "Failed to query performance detail, ret=" << ret;
     } else if (enable_profiling) {
-        LOG(INFO) << "Performance detail:";
+        LOG(INFO) << "Performance detail for " << model_name << ":";
         LOG(INFO) << perf_detail.perf_data;
         
-        // 将性能详情添加到JSON结果中
-        result["ModelAnalysisResult"]["RKNN_API_PerformanceDetail"] = perf_detail.perf_data;
+        // 使用模型名称作为键
+        result[model_name]["RKNN_API_PerformanceDetail"] = perf_detail.perf_data;
     }
 
-    // // 查询运行时性能数据
-    // rknn_perf_run perf_run;
-    // ret = rknn_query(ctx, RKNN_QUERY_PERF_RUN, &perf_run, sizeof(perf_run));
-    // if (ret != RKNN_SUCC) {
-    //     LOG(ERROR) << "Failed to query performance run, ret=" << ret;
-    // } else {
-    //     LOG(INFO) << "Performance run:";
-    //     LOG(INFO) << "  system occupy CPU ratio: " << perf_run.run_duration << " us";
-    //     // LOG(INFO) << "  NPU running time: " << perf_run.execute_time << " us";
-    //     // LOG(INFO) << "  CPU running time: " << perf_run.cpu_execute_time << " us";
-        
-    //     // // 将运行时性能数据添加到JSON结果中
-    //     // result["ModelAnalysisResult"]["RuntimeResult"]["SystemOccupyCPURatio"] = perf_run.system_occupy_ratio;
-    //     // result["ModelAnalysisResult"]["RuntimeResult"]["NPUExecuteTime"] = perf_run.execute_time;
-    //     // result["ModelAnalysisResult"]["RuntimeResult"]["CPUExecuteTime"] = perf_run.cpu_execute_time;
-    // }
 
     for (int i = 0; i < io_num.n_input; i++)
     {
@@ -256,22 +243,33 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
             free(outputs[i].buf);
         }
     }
+
+ // // 获取RKNN版本信息
+    rknn_sdk_version version;
+    ret = rknn_query(ctx, RKNN_QUERY_SDK_VERSION, &version, sizeof(version));
+    if (ret == RKNN_SUCC) {
+        result[model_name]["MetaInfo"]["BackendName"] = "RKNN";
+        result[model_name]["MetaInfo"]["BackendVersion"] = std::string(version.api_version) + 
+                                                 " (driver version: " + version.drv_version + ")";
+        LOG(INFO) << "RKNN SDK Version: " << version.api_version << " (driver version: " << version.drv_version << ")";
+    }
+
     rknn_destroy(ctx);
 
     // 设置模型分析结果
-    result["ModelAnalysisResult"]["RuntimeResult"]["Warmups"] = num_warmup;
-    result["ModelAnalysisResult"]["RuntimeResult"]["Rounds"] = num_run;
-    result["ModelAnalysisResult"]["RuntimeResult"]["InitTime"] = init_time;
-    result["ModelAnalysisResult"]["RuntimeResult"]["InitMemory"] = mem_size.total_weight_size / 1024.0 / 1024.0;  // 转换为 MB
+    result[model_name]["RuntimeResult"]["Warmups"] = num_warmup;
+    result[model_name]["RuntimeResult"]["Rounds"] = num_run;
+    result[model_name]["RuntimeResult"]["InitTime"] = init_time;
+    result[model_name]["RuntimeResult"]["InitMemory"] = mem_size.total_weight_size / 1024.0 / 1024.0;  // 转换为 MB
     
     // 设置平均延迟等统计数据
-    result["ModelAnalysisResult"]["RuntimeResult"]["AvgTotalRoundLatency"] = std::get<1>(data).mean;
-    result["ModelAnalysisResult"]["RuntimeResult"]["AvgPeakMemory"] = 
+    result[model_name]["RuntimeResult"]["AvgTotalRoundLatency"] = std::get<1>(data).mean;
+    result[model_name]["RuntimeResult"]["AvgPeakMemory"] = 
         (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;  // 总内存使用（MB）
-    result["ModelAnalysisResult"]["RuntimeResult"]["AvgPeakPower"] = 0.0;  // 如果有功耗数据，在这里设置
-    result["ModelAnalysisResult"]["RuntimeResult"]["StdTotalRoundLatency"] = std::get<1>(data).stdev;
-    result["ModelAnalysisResult"]["RuntimeResult"]["MinTotalRoundLatency"] = std::get<1>(data).min;
-    result["ModelAnalysisResult"]["RuntimeResult"]["MaxTotalRoundLatency"] = std::get<1>(data).max;
+    result[model_name]["RuntimeResult"]["AvgPeakPower"] = 0.0;  // 如果有功耗数据，在这里设置
+    result[model_name]["RuntimeResult"]["StdTotalRoundLatency"] = std::get<1>(data).stdev;
+    result[model_name]["RuntimeResult"]["MinTotalRoundLatency"] = std::get<1>(data).min;
+    result[model_name]["RuntimeResult"]["MaxTotalRoundLatency"] = std::get<1>(data).max;
     
     // 添加每轮运行结果
     const auto& raw_times = timer.durations_warmup_;  // 预热轮次
@@ -283,7 +281,7 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         round["TotalRoundPeakMemory"] = 
             (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;
         round["TotalRoundAvgPower"] = 0.0;  // 如果有功耗数据，在这里设置
-        result["ModelAnalysisResult"]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
+        result[model_name]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
     }
     
     const auto& normal_times = timer.durations_normal_;  // 正式运行轮次
@@ -295,10 +293,33 @@ int batch_benchmark(const char *model, int num_warmup, int num_run, bool enable_
         round["TotalRoundPeakMemory"] = 
             (mem_size.total_weight_size + mem_size.total_internal_size) / 1024.0 / 1024.0;
         round["TotalRoundAvgPower"] = 0.0;  // 如果有功耗数据，在这里设置
-        result["ModelAnalysisResult"]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
+        result[model_name]["RuntimeResult"]["MultiRoundsProfileResult"].push_back(round);
     }
 
+    // 添加元数据信息
+    result[model_name]["MetaInfo"]["ModelName"] = std::filesystem::path(model).filename().string();
+    result[model_name]["MetaInfo"]["ModelPath"] = model;
     
+    // 获取系统信息
+    struct utsname system_info;
+    if (uname(&system_info) == 0) {
+        result[model_name]["MetaInfo"]["OSName"] = system_info.sysname;
+        // result[model_name]["MetaInfo"]["OSVersion"] = system_info.release;
+        result[model_name]["MetaInfo"]["Machine"] = system_info.machine;
+        result[model_name]["MetaInfo"]["KernelVersion"] = system_info.version;
+        result[model_name]["MetaInfo"]["KernelRelease"] = system_info.release;
+    }
+    
+   
+    
+    // 获取设备信息
+    // result["MetaInfo"]["Hardware"]["DeviceCount"] = 1;
+    // result["MetaInfo"]["Hardware"]["Devices"].push_back("RKNN Device");
+    
+    // 添加时间戳
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    result[model_name]["MetaInfo"]["Timestamp"] = std::ctime(&now_time_t);
 
     LOG(INFO) << "Profiling model:" << model << " done!";
     return 0;
